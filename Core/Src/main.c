@@ -51,6 +51,9 @@ UART_HandleTypeDef huart4;
 
 /* USER CODE BEGIN PV */
 #define MAX_IMAGE_SIZE 65536
+//for mode
+#define Max_pic_per_mode 5
+#define Max_mode_num 11
 
 uint32_t IMAGE_H = 120;
 uint32_t IMAGE_W = 156;
@@ -84,6 +87,29 @@ uint8_t image_arr_rgb888[MAX_IMAGE_SIZE*3] = {0};
 uint8_t display_image_number = 0;
 uint8_t spi_rev_2byte[2] = {0};
 uint8_t setting_changed = 0;
+
+//for mode
+uint8_t Playing_mode = 1;
+uint8_t Mode_pic[Max_pic_per_mode]={0};
+/*
+uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num+1]=
+{
+		{0,1,0,1,0,1,0,1,0,1,//mode_config 0
+		0,1,0,1,0,1,0,1,0,1, //mode_config 1
+		0,1,0,1,0,1,0,1,0,1, //mode_config 2
+		0,1,0,1,0,1,0,1,0,1, //mode_config 3
+		0,1,0,1,0,1,0,1,0,1, //mode_config 4
+		0,1,0,1,0,1,0,1,0,1, //mode_config 5
+		0,1,0,1,0,1,0,1,0,1, //mode_config 6
+		0,1,0,1,0,1,0,1,0,1, //mode_config 7
+		0,1,0,1,0,1,0,1,0,1, //mode_config 8
+		0,1,0,1,0,1,0,1,0,1, //mode_config 9
+		0,1,0,1,0,1,0,1,0,1} //playing_mode record at last.
+};
+*/
+uint8_t Mode_changed = 1;//initial or mode change
+uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num]={0};
+uint8_t Current_mode_config[10]={0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -106,6 +132,9 @@ void delay_us(int time);
 void delay_100ns(int time);
 static void my_MX_DSIHOST_DSI_Init(void);
 static void my_MX_LTDC_Init(void);
+void mode_init();
+void write_flash_config();
+void read_flash_config();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -149,6 +178,17 @@ int main(void)
   /* USER CODE BEGIN 2 */
   mipi_config();
   HAL_UART_Transmit(&huart4, "start_s", 7, 1000);
+
+  play_mode = 3;
+  play_mode_source = 0;
+  mode_init();
+  write_flash_config();
+  for(int i=0; i <= Max_pic_per_mode*Max_mode_num;i++){
+	  Mode_config[i*2]=0;    //picture_id
+	  Mode_config[i*2+1]=0;  //picture_delay_time
+  }
+  Mode_config[Max_pic_per_mode*2*Max_mode_num-1] = 0; //playing_mode
+  read_flash_config();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -200,6 +240,56 @@ int main(void)
 				  {
 				  	  break;
 				  }
+			  }
+		  }
+		  else if (play_mode == 3)
+		  {
+			  uint8_t should_break = 0;
+			  uint8_t Picture_count = 0;
+			  while(1){
+				  //initial or change mode
+				  if( Mode_changed )
+				  {
+					  read_flash_config();
+					  Playing_mode = Mode_config[100];//playing_mode_store = [Max_pic_per_mode*2*(Max_mode_num-1)]
+					  //fill Current_mode_config from Mode_config by using Playing_mode
+					  for(int i=Playing_mode*10,j=0; i<(Playing_mode+1)*10 ;i++){
+						 Current_mode_config[j]=Mode_config[i];
+						 j++;
+					  }
+					  Mode_changed=0;
+					  //check how many pics to display
+					  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
+					  Picture_count = 0;
+					  for(int i = 0 ; i < 5 ; i++){
+						 if(Current_mode_config[i*2] != 255)
+							 Picture_count++;
+					  }
+				  }
+				  //display
+				  for (int i = 0; i < Picture_count*2; i = i+2)
+				  {
+					  HAL_GPIO_WritePin(sync_GPIO_Port, sync_Pin, GPIO_PIN_SET);// wait to sync
+					  int current_pic_delay=(Current_mode_config[i+1])*500;//ms
+					  HAL_Delay(current_pic_delay);
+//					  HAL_GPIO_WritePin(sync_GPIO_Port, sync_Pin, GPIO_PIN_RESET);
+//						  if (play_mode_source != 0 || play_mode != 1 || setting_changed == 1)
+//						  {
+//							  should_break = 1;
+//							  break;
+//						  }
+					  read_flash_page(&frame_buf_flash, Current_mode_config[i]);
+					  display_panel(&frame_buf_flash);
+					  //display_image_number = i;
+				  }
+			  }
+			  if (should_break == 0)
+			  {
+				  display_image_number = 0;
+			  }
+			  else if (should_break == 1)
+			  {
+				  break;
 			  }
 		  }
 	  }
@@ -864,10 +954,6 @@ void Write_Registers_data(uint8_t do_flag)
 		case 24: //content size
 			content_size = data[0];
 			break;
-		case 25:
-			play_mode = 0;//Static display
-			play_mode_source = 1;			//Display content of frame buffer (0)
-			break;
 		}
 	}
 	//HAL_UART_Transmit(&huart4, &Register_Address, 1, 1000);
@@ -1292,7 +1378,186 @@ void erase_flash_sector(uint8_t image_id)
 		flash_wait_nobusy();
 	}
 }*/
+void mode_init(){
+	for(int i=0; i <= Max_pic_per_mode*Max_mode_num*2;i++){
+		Mode_config[i*2]=i;//picture_id
+		Mode_config[i*2+1]=i;//picture_delay_time
+	}
+	Mode_config[Max_pic_per_mode*(Max_mode_num-1)*2]=0;
+	//test mode 1
+	Mode_config[0]=0;
+	Mode_config[1]=1;
+	Mode_config[2]=1;
+	Mode_config[3]=1;
+	Mode_config[4]=255;
+	Mode_config[5]=1;
+	Mode_config[6]=255;
+	Mode_config[7]=1;
+	Mode_config[8]=255;
+	Mode_config[9]=1;
+	//test mode 2
+	Mode_config[10]=0;
+	Mode_config[11]=4;
+	Mode_config[12]=1;
+	Mode_config[13]=4;
+	Mode_config[14]=255;
+	Mode_config[15]=1;
+	Mode_config[16]=255;
+	Mode_config[17]=1;
+	Mode_config[18]=255;
+	Mode_config[19]=1;
+	//test mode 3
+	Mode_config[20]=2;
+	Mode_config[21]=1;
+	Mode_config[22]=3;
+	Mode_config[23]=1;
+	Mode_config[24]=4;
+	Mode_config[25]=1;
+	Mode_config[26]=5;
+	Mode_config[27]=1;
+	Mode_config[28]=255;
+	Mode_config[29]=1;
+	//test mode 3
+	Mode_config[30]=2;
+	Mode_config[31]=4;
+	Mode_config[32]=3;
+	Mode_config[33]=4;
+	Mode_config[34]=4;
+	Mode_config[35]=4;
+	Mode_config[36]=5;
+	Mode_config[37]=4;
+	Mode_config[38]=255;
+	Mode_config[39]=1;
+	//test mode 4
+	Mode_config[40]=6;
+	Mode_config[41]=1;
+	Mode_config[42]=7;
+	Mode_config[43]=1;
+	Mode_config[44]=8;
+	Mode_config[45]=1;
+	Mode_config[46]=9;
+	Mode_config[47]=1;
+	Mode_config[48]=10;
+	Mode_config[49]=1;
+	//test mode 5
+	Mode_config[50]=6;
+	Mode_config[51]=4;
+	Mode_config[52]=7;
+	Mode_config[53]=4;
+	Mode_config[54]=8;
+	Mode_config[55]=4;
+	Mode_config[56]=9;
+	Mode_config[57]=4;
+	Mode_config[58]=10;
+	Mode_config[59]=4;
+	//test mode 6
+	Mode_config[60]=11;
+	Mode_config[61]=1;
+	Mode_config[62]=12;
+	Mode_config[63]=1;
+	Mode_config[64]=255;
+	Mode_config[65]=1;
+	Mode_config[66]=255;
+	Mode_config[67]=1;
+	Mode_config[68]=255;
+	Mode_config[69]=1;
+	//test mode 7
+	Mode_config[70]=11;
+	Mode_config[71]=4;
+	Mode_config[72]=12;
+	Mode_config[73]=4;
+	Mode_config[74]=255;
+	Mode_config[75]=1;
+	Mode_config[76]=255;
+	Mode_config[77]=1;
+	Mode_config[78]=255;
+	Mode_config[79]=1;
+	//test mode 8
+	Mode_config[80]=13;
+	Mode_config[81]=1;
+	Mode_config[82]=14;
+	Mode_config[83]=1;
+	Mode_config[84]=255;
+	Mode_config[85]=1;
+	Mode_config[86]=255;
+	Mode_config[87]=1;
+	Mode_config[88]=255;
+	Mode_config[89]=1;
+	//test mode 8
+	Mode_config[90]=13;
+	Mode_config[91]=1;
+	Mode_config[92]=14;
+	Mode_config[93]=1;
+	Mode_config[94]=255;
+	Mode_config[95]=1;
+	Mode_config[96]=255;
+	Mode_config[97]=1;
+	Mode_config[98]=255;
+	Mode_config[99]=1;
+}
+void write_flash_config()
+{
+	//content_size：0=16kb, 1=32kb, 2=32kb, 3=64kb
+	int divide_value = 0;
+	if(content_size==0) divide_value=256/64; //divide_value=4
+	else if(content_size==1) divide_value=256/128; //divide_value=2
+	else if(content_size==2) divide_value=256/256;//divide_value=1
+	int image_id = 31;
+	erase_flash_sector(image_id);
 
+	int image_id_H = image_id / divide_value;
+	int image_id_L = image_id % divide_value;
+	int count = 0;
+	for (uint32_t i = image_id_L*(256/divide_value); i < (image_id_L+1)*(256/divide_value); i++)
+	{
+		// enable write
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_RESET);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x06}, 1, 1000);
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_SET);
+		delay_us(10);
+
+		// write data to flash page
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_RESET);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x02}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){image_id_H}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){i}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x00}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, &Mode_config[0], Max_pic_per_mode*Max_mode_num*2, 1000);
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_SET);
+		delay_us(10);
+
+		// disable write
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_RESET);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x04}, 1, 1000);
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_SET);
+		delay_us(1000);
+		count++;
+	}
+
+	flash_wait_nobusy();
+}
+void read_flash_config()
+{
+	int divide_value = 0;
+	if(content_size==0) divide_value=256/64;
+	else if(content_size==1) divide_value=256/128;
+	else if(content_size==2) divide_value=256/256;
+
+	int image_id= 31;
+	int image_id_H = image_id / divide_value;
+	int image_id_L = image_id % divide_value;
+	int count = 0;
+	for (uint32_t i = image_id_L*(256/divide_value); i < (image_id_L+1)*(256/divide_value); i++)
+	{
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_RESET);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x03}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){image_id_H}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){i}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x00}, 1, 1000);
+		HAL_SPI_Receive(&hspi2, &Mode_config[0],  Max_pic_per_mode*Max_mode_num*2, 1000);
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_SET);
+	}
+}
 void write_flash_page(uint8_t *data, uint8_t image_id)
 {
 	int divide_value = 0;
@@ -1562,8 +1827,21 @@ void delay_100ns(int time)
 }
 
 int button_count = 0;
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)//PD12
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+	if (play_mode == 3)
+	{
+		Playing_mode = Playing_mode + 1;
+		if(Playing_mode << 10)
+			Mode_config[100] = Playing_mode;
+		else
+		{
+			Playing_mode = 0;
+			Mode_config[100] = 0;
+		}
+		write_flash_config();
+		Mode_changed = 1;
+	}
 	if (GPIO_Pin == GPIO_PIN_12)
 	{
 		button_count++;
