@@ -246,48 +246,43 @@ int main(void)
 		  {
 			  uint8_t should_break = 0;
 			  uint8_t Picture_count = 0;
-			  while(1){
-				  //initial or change mode
-				  if( Mode_changed )
-				  {
-					  read_flash_config();
-					  Playing_mode = Mode_config[100];//playing_mode_store = [Max_pic_per_mode*2*(Max_mode_num-1)]
-					  //fill Current_mode_config from Mode_config by using Playing_mode
-					  for(int i=Playing_mode*10,j=0; i<(Playing_mode+1)*10 ;i++){
-						 Current_mode_config[j]=Mode_config[i];
-						 j++;
-					  }
-					  Mode_changed=0;
-					  //check how many pics to display
-					  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
-					  Picture_count = 0;
-					  for(int i = 0 ; i < 5 ; i++){
-						 if(Current_mode_config[i*2] != 255)
-							 Picture_count++;
-					  }
+			  //initial or change mode
+			  if( Mode_changed )
+			  {
+				  read_flash_config();
+				  Playing_mode = Mode_config[100];//playing_mode_store = [Max_pic_per_mode*2*(Max_mode_num-1)]
+				  //fill Current_mode_config from Mode_config by using Playing_mode
+				  for(int i=Playing_mode*10,j=0; i<(Playing_mode+1)*10 ;i++){
+					 Current_mode_config[j]=Mode_config[i];
+					 j++;
 				  }
+				  Mode_changed = 0;
+				  //check how many pics to display
+				  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
+				  Picture_count = 0;
+				  for(int i = 0 ; i < 5 ; i++){
+					 if(Current_mode_config[i*2] != 255)
+						 Picture_count++;
+				  }
+			  }
+			  while(1){
 				  //display
 				  for (int i = 0; i < Picture_count*2; i = i+2)
 				  {
 					  HAL_GPIO_WritePin(sync_GPIO_Port, sync_Pin, GPIO_PIN_SET);// wait to sync
 					  int current_pic_delay=(Current_mode_config[i+1])*500;//ms
 					  HAL_Delay(current_pic_delay);
-//					  HAL_GPIO_WritePin(sync_GPIO_Port, sync_Pin, GPIO_PIN_RESET);
-//						  if (play_mode_source != 0 || play_mode != 1 || setting_changed == 1)
-//						  {
-//							  should_break = 1;
-//							  break;
-//						  }
+					  //HAL_GPIO_WritePin(sync_GPIO_Port, sync_Pin, GPIO_PIN_RESET);
+					  if (play_mode_source != 0 || play_mode != 3 || Mode_changed == 1)
+					  {
+						  should_break = 1;
+						  break;
+					  }
 					  read_flash_page(&frame_buf_flash, Current_mode_config[i]);
 					  display_panel(&frame_buf_flash);
-					  //display_image_number = i;
 				  }
 			  }
-			  if (should_break == 0)
-			  {
-				  display_image_number = 0;
-			  }
-			  else if (should_break == 1)
+			  if (should_break == 1)
 			  {
 				  break;
 			  }
