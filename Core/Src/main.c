@@ -265,14 +265,13 @@ int main(void)
 						 Picture_count++;
 				  }
 			  }
-			  while(1){
-				  //display
+			  while(1)//display
+			  {
 				  for (int i = 0; i < Picture_count*2; i = i+2)
 				  {
-					  HAL_GPIO_WritePin(sync_GPIO_Port, sync_Pin, GPIO_PIN_SET);// wait to sync
-					  int current_pic_delay=(Current_mode_config[i+1])*500;//ms
-					  HAL_Delay(current_pic_delay);
-					  //HAL_GPIO_WritePin(sync_GPIO_Port, sync_Pin, GPIO_PIN_RESET);
+					  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);// wait to sync
+					  //int current_pic_delay=(Current_mode_config[i+1])*250;//ms
+					  //HAL_Delay(current_pic_delay);
 					  if (play_mode_source != 0 || play_mode != 3 || Mode_changed == 1)
 					  {
 						  should_break = 1;
@@ -281,10 +280,10 @@ int main(void)
 					  read_flash_page(&frame_buf_flash, Current_mode_config[i]);
 					  display_panel(&frame_buf_flash);
 				  }
-			  }
-			  if (should_break == 1)
-			  {
-				  break;
+				  if (should_break == 1)
+				  {
+					  break;
+				  }
 			  }
 		  }
 	  }
@@ -949,6 +948,18 @@ void Write_Registers_data(uint8_t do_flag)
 		case 24: //content size
 			content_size = data[0];
 			break;
+		case 25:// force play buffer to write flash.
+			play_mode_source = 1;
+			play_mode = 2;
+			break;
+		case 33:// force play buffer to write flash.
+			Mode_config[100] = data[0];
+			Playing_mode = data[0];
+
+			write_flash_config();
+			Mode_changed = 1;
+
+			break;
 		}
 	}
 	//HAL_UART_Transmit(&huart4, &Register_Address, 1, 1000);
@@ -959,6 +970,12 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
 	//HAL_UART_Transmit(&huart4, &spi_rev_2byte, 2, 1000);
 	// USB command: Type and command
+	if(hspi == SPI2){
+		int a=2;
+	}
+	if(hspi == SPI3){
+		int a=3;
+	}
 	switch (spi_rev_2byte[0] & 0b11000000)
 	{
 	case 0b00000000: //Chain SPI functions
@@ -1824,19 +1841,6 @@ void delay_100ns(int time)
 int button_count = 0;
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-	if (play_mode == 3)
-	{
-		Playing_mode = Playing_mode + 1;
-		if(Playing_mode << 10)
-			Mode_config[100] = Playing_mode;
-		else
-		{
-			Playing_mode = 0;
-			Mode_config[100] = 0;
-		}
-		write_flash_config();
-		Mode_changed = 1;
-	}
 	if (GPIO_Pin == GPIO_PIN_12)
 	{
 		button_count++;
