@@ -1497,9 +1497,9 @@ void mode_init(){
 	Mode_config[89]=1;
 	//test mode 8
 	Mode_config[90]=13;
-	Mode_config[91]=1;
+	Mode_config[91]=4;
 	Mode_config[92]=14;
-	Mode_config[93]=1;
+	Mode_config[93]=4;
 	Mode_config[94]=255;
 	Mode_config[95]=1;
 	Mode_config[96]=255;
@@ -1845,7 +1845,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	{
 		button_count++;
 		delay_us(50000);
-		for (int i = 0; i < 200; i++)
+		for (int i = 0; i < 1200; i++)
 		{
 			if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_12) == GPIO_PIN_RESET)
 			{
@@ -1861,14 +1861,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			button_count++;
 			delay_us(10000);
 		}
-		/*if (play_mode == 1 || play_mode == 2)
+		if (play_mode == 1 || play_mode == 2)
 		{
 			play_mode = 0;
 		}
 		else if (play_mode == 0)
 		{
 			play_mode = 1;
-		}*/
+		}
 		button_count = 0;
 	}
 }
