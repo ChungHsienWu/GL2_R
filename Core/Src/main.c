@@ -270,15 +270,13 @@ int main(void)
 				  for (int i = 0; i < Picture_count*2; i = i+2)
 				  {
 					  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);// wait to sync
-					  //int current_pic_delay=(Current_mode_config[i+1])*250;//ms
-					  //HAL_Delay(current_pic_delay);
+					  read_flash_pages(&frame_buf_flash, Current_mode_config[i]);
+					  display_panel(&frame_buf_flash);
 					  if (play_mode_source != 0 || play_mode != 3 || Mode_changed == 1)
 					  {
 						  should_break = 1;
 						  break;
 					  }
-					  read_flash_page(&frame_buf_flash, Current_mode_config[i]);
-					  display_panel(&frame_buf_flash);
 				  }
 				  if (should_break == 1)
 				  {
@@ -1843,24 +1841,24 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if (GPIO_Pin == GPIO_PIN_12)
 	{
-		button_count++;
-		delay_us(50000);
-		for (int i = 0; i < 1200; i++)
-		{
-			if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_12) == GPIO_PIN_RESET)
-			{
-				if (button_count < 80 && button_count > 5 && play_mode == 0)
-				{
-					display_image_number++;
-					if (display_image_number >= spi_flash_content_length)
-						display_image_number = 0;
-				}
-				button_count = 0;
-				return;
-			}
-			button_count++;
-			delay_us(10000);
-		}
+//		button_count++;
+//		delay_us(50000);
+//		for (int i = 0; i < 1200; i++)
+//		{
+//			if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_12) == GPIO_PIN_RESET)
+//			{
+//				if (button_count < 80 && button_count > 5 && play_mode == 0)
+//				{
+//					display_image_number++;
+//					if (display_image_number >= spi_flash_content_length)
+//						display_image_number = 0;
+//				}
+//				button_count = 0;
+//				return;
+//			}
+//			button_count++;
+//			delay_us(10000);
+//		}
 		if (play_mode == 1 || play_mode == 2)
 		{
 			play_mode = 0;
