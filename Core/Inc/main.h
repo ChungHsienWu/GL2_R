@@ -63,6 +63,7 @@ void Error_Handler(void);
 #define RESXP_GPIO_Port GPIOB
 #define sync_Pin GPIO_PIN_8
 #define sync_GPIO_Port GPIOA
+#define sync_EXTI_IRQn EXTI9_5_IRQn
 #define pic_sw_Pin GPIO_PIN_12
 #define pic_sw_GPIO_Port GPIOD
 #define pic_sw_EXTI_IRQn EXTI15_10_IRQn

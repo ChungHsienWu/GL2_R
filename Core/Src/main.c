@@ -110,6 +110,8 @@ uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num+1]=
 uint8_t Mode_changed = 1;//initial or mode change
 uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num]={0};
 uint8_t Current_mode_config[10]={0};
+uint8_t Current_Picture = 0;
+uint8_t Picture_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -222,7 +224,7 @@ int main(void)
 				  for (int i = auto_run_start_content; i <= auto_run_end_content; i++)
 				  {
 					  HAL_Delay(5);
-					  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);
+					  //while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);
 					  if (play_mode_source != 0 || play_mode != 1 || setting_changed == 1)
 					  {
 						  should_break = 1;
@@ -245,7 +247,7 @@ int main(void)
 		  else if (play_mode == 3)
 		  {
 			  uint8_t should_break = 0;
-			  uint8_t Picture_count = 0;
+
 			  //initial or change mode
 			  if( Mode_changed )
 			  {
@@ -256,6 +258,7 @@ int main(void)
 					 Current_mode_config[j]=Mode_config[i];
 					 j++;
 				  }
+				  Current_Picture = 0;
 				  Mode_changed = 0;
 				  //check how many pics to display
 				  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
@@ -267,21 +270,21 @@ int main(void)
 			  }
 			  while(1)//display
 			  {
-				  for (int i = 0; i < Picture_count*2; i = i+2)
-				  {
-					  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);// wait to sync
-					  read_flash_pages(&frame_buf_flash, Current_mode_config[i]);
-					  display_panel(&frame_buf_flash);
-					  if (play_mode_source != 0 || play_mode != 3 || Mode_changed == 1)
-					  {
-						  should_break = 1;
-						  break;
-					  }
-				  }
-				  if (should_break == 1)
-				  {
-					  break;
-				  }
+//				  for (int i = 0; i < Picture_count*2; i = i+2)
+//				  {
+//					  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);// wait to sync
+//					  read_flash_pages(&frame_buf_flash, Current_mode_config[i]);
+//					  display_panel(&frame_buf_flash);
+//					  if (play_mode_source != 0 || play_mode != 3 || Mode_changed == 1)
+//					  {
+//						  should_break = 1;
+//						  break;
+//					  }
+//				  }
+//				  if (should_break == 1)
+//				  {
+//					  break;
+//				  }
 			  }
 		  }
 	  }
@@ -292,7 +295,7 @@ int main(void)
 			  while(1)
 			  {
 				  HAL_Delay(5);
-				  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);
+				  //while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);
 				  if (play_mode_source != 1 || play_mode != 2 || setting_changed == 1)
 				  {
 					  break;
@@ -300,7 +303,7 @@ int main(void)
 				  display_panel(&frame_buf_0);
 
 				  HAL_Delay(5);
-				  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);
+				  //while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);
 				  if (play_mode_source != 1 || play_mode != 2 || setting_changed == 1)
 				  {
 					  break;
@@ -691,8 +694,6 @@ static void MX_UART4_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOG_CLK_ENABLE();
@@ -725,8 +726,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : sync_Pin */
   GPIO_InitStruct.Pin = sync_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(sync_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : pic_sw_Pin */
@@ -750,11 +751,12 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(en_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -1507,7 +1509,7 @@ void mode_init(){
 }
 void write_flash_config()
 {
-	//content_size：0=16kb, 1=32kb, 2=32kb, 3=64kb
+	//content_size�???0=16kb, 1=32kb, 2=32kb, 3=64kb
 	int divide_value = 0;
 	if(content_size==0) divide_value=256/64; //divide_value=4
 	else if(content_size==1) divide_value=256/128; //divide_value=2
@@ -1868,6 +1870,17 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			play_mode = 1;
 		}
 		button_count = 0;
+	}
+	else if(GPIO_Pin == GPIO_PIN_8){
+		if(Picture_count > Current_Picture && Mode_changed == 0){
+
+		  read_flash_page(&frame_buf_flash, Current_mode_config[Current_Picture]);
+		  display_panel(&frame_buf_flash);
+		  Current_Picture++;
+		}
+		else{
+			Current_Picture = 0;
+		}
 	}
 }
 
