@@ -247,29 +247,30 @@ int main(void)
 		  else if (play_mode == 3)
 		  {
 			  uint8_t should_break = 0;
-
+			  while(1){
 			  //initial or change mode
-			  if( Mode_changed )
-			  {
-				  read_flash_config();
-				  Playing_mode = Mode_config[100];//playing_mode_store = [Max_pic_per_mode*2*(Max_mode_num-1)]
-				  //fill Current_mode_config from Mode_config by using Playing_mode
-				  for(int i=Playing_mode*10,j=0; i<(Playing_mode+1)*10 ;i++){
-					 Current_mode_config[j]=Mode_config[i];
-					 j++;
-				  }
-				  Current_Picture = 0;
-				  Mode_changed = 0;
-				  //check how many pics to display
-				  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
-				  Picture_count = 0;
-				  for(int i = 0 ; i < 5 ; i++){
-					 if(Current_mode_config[i*2] != 255)
-						 Picture_count++;
+				  if( Mode_changed )
+				  {
+					  read_flash_config();
+					  Playing_mode = Mode_config[100];//playing_mode_store = [Max_pic_per_mode*2*(Max_mode_num-1)]
+					  //fill Current_mode_config from Mode_config by using Playing_mode
+					  for(int i=Playing_mode*10,j=0; i<(Playing_mode+1)*10 ;i++){
+						 Current_mode_config[j]=Mode_config[i];
+						 j++;
+					  }
+					  Current_Picture = 0;
+					  Mode_changed = 0;
+					  //check how many pics to display
+					  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
+					  Picture_count = 0;
+					  for(int i = 0 ; i < 5 ; i++){
+						 if(Current_mode_config[i*2] != 255)
+							 Picture_count++;
+					  }
 				  }
 			  }
-			  while(1)//display
-			  {
+//			  while(1)//display
+//			  {
 //				  for (int i = 0; i < Picture_count*2; i = i+2)
 //				  {
 //					  while(HAL_GPIO_ReadPin(sync_GPIO_Port, sync_Pin) == GPIO_PIN_SET);// wait to sync
@@ -285,7 +286,7 @@ int main(void)
 //				  {
 //					  break;
 //				  }
-			  }
+//			  }
 		  }
 	  }
 	  else if (play_mode_source == 1)
@@ -957,7 +958,8 @@ void Write_Registers_data(uint8_t do_flag)
 			Playing_mode = data[0];
 
 			write_flash_config();
-			Mode_changed = 1;
+			play_mode =3;
+ 			Mode_changed = 1;
 
 			break;
 		}
@@ -1843,44 +1845,17 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if (GPIO_Pin == GPIO_PIN_12)
 	{
-//		button_count++;
-//		delay_us(50000);
-//		for (int i = 0; i < 1200; i++)
-//		{
-//			if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_12) == GPIO_PIN_RESET)
-//			{
-//				if (button_count < 80 && button_count > 5 && play_mode == 0)
-//				{
-//					display_image_number++;
-//					if (display_image_number >= spi_flash_content_length)
-//						display_image_number = 0;
-//				}
-//				button_count = 0;
-//				return;
-//			}
-//			button_count++;
-//			delay_us(10000);
-//		}
-		if (play_mode == 1 || play_mode == 2)
-		{
-			play_mode = 0;
-		}
-		else if (play_mode == 0)
-		{
-			play_mode = 1;
-		}
-		button_count = 0;
-	}
-	else if(GPIO_Pin == GPIO_PIN_8){
-		if(Picture_count > Current_Picture && Mode_changed == 0){
+		if(play_mode = 3){
 
-		  read_flash_page(&frame_buf_flash, Current_mode_config[Current_Picture]);
-		  display_panel(&frame_buf_flash);
-		  Current_Picture++;
 		}
-		else{
+	}
+	else if(GPIO_Pin == GPIO_PIN_8 && Mode_changed == 0){
+		if(Picture_count <= Current_Picture ){
 			Current_Picture = 0;
 		}
+		read_flash_page(&frame_buf_flash, Current_mode_config[Current_Picture*2]);//Current_mode_config[pic1 ,pic1 delay time ,pic2 ,pic2 delay time...]
+		display_panel(&frame_buf_flash);
+		Current_Picture++;
 	}
 }
 
