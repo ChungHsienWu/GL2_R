@@ -66,8 +66,8 @@ all: main-build
 main-build: GL_REV2_R.elf secondary-outputs
 
 # Tool invocations
-GL_REV2_R.elf GL_REV2_R.map: $(OBJS) $(USER_OBJS) D:\CC\ data\ch_wu\GL2_R\STM32L4R9ZIYXP_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "GL_REV2_R.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\CC data\ch_wu\GL2_R\STM32L4R9ZIYXP_FLASH.ld" --specs=nosys.specs -Wl,-Map="GL_REV2_R.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+GL_REV2_R.elf GL_REV2_R.map: $(OBJS) $(USER_OBJS) D:\Develope\liqxtalProject\GL2_R\STM32L4R9ZIYXP_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "GL_REV2_R.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\Develope\liqxtalProject\GL2_R\STM32L4R9ZIYXP_FLASH.ld" --specs=nosys.specs -Wl,-Map="GL_REV2_R.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

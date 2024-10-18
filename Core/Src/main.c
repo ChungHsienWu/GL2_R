@@ -40,6 +40,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+DMA2D_HandleTypeDef hdma2d;
+
 DSI_HandleTypeDef hdsi;
 
 LTDC_HandleTypeDef hltdc;
@@ -81,6 +83,7 @@ uint8_t frame_buf_tmp[MAX_IMAGE_SIZE] = {0};
 uint8_t frame_buf_0[MAX_IMAGE_SIZE] = {0};
 uint8_t frame_buf_1[MAX_IMAGE_SIZE] = {0};
 uint8_t frame_buf_flash[MAX_IMAGE_SIZE] = {0};
+uint8_t frame_buf_mode[150000] = {0};
 uint8_t play_mode = 0;		  //0=Static display, 1=Dynamic display, 2=Dynamic display frame buffer (0) and frame buffer (1)
 uint8_t play_mode_source = 0; //0=flash, 1=frame_buf_0, 2=frame_buf_1
 uint8_t image_arr_rgb888[MAX_IMAGE_SIZE*3] = {0};
@@ -112,6 +115,13 @@ uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num]={0};
 uint8_t Current_mode_config[10]={0};
 uint8_t Current_Picture = 0;
 uint8_t Picture_count = 0;
+
+//for LCD_IRQ
+uint8_t g_test=0;
+uint8_t g_current_pic = 0;
+uint8_t g_Mode_picture_count = 0;
+uint8_t g_change_pic = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -122,6 +132,7 @@ static void MX_LTDC_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_UART4_Init(void);
+static void MX_DMA2D_Init(void);
 /* USER CODE BEGIN PFP */
 static void mipi_config(void);
 static void LCD_PowerOn(void);
@@ -137,6 +148,7 @@ static void my_MX_LTDC_Init(void);
 void mode_init();
 void write_flash_config();
 void read_flash_config();
+void read_flash_page_DMA2d(uint8_t *data, uint8_t image_id);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -177,6 +189,7 @@ int main(void)
   MX_SPI2_Init();
   MX_SPI3_Init();
   MX_UART4_Init();
+  MX_DMA2D_Init();
   /* USER CODE BEGIN 2 */
   mipi_config();
   HAL_UART_Transmit(&huart4, "start_s", 7, 1000);
@@ -191,6 +204,25 @@ int main(void)
   }
   Mode_config[Max_pic_per_mode*2*Max_mode_num-1] = 0; //playing_mode
   read_flash_config();
+  Playing_mode = Mode_config[100];//playing_mode_store = [Max_pic_per_mode*2*(Max_mode_num-1)]
+  //fill Current_mode_config from Mode_config by using Playing_mode
+  for(int i=Playing_mode*10,j=0; i<(Playing_mode+1)*10 ;i++){
+	 Current_mode_config[j]=Mode_config[i];
+	 j++;
+  }
+  //frist_change_mode = 1;
+  //check how many pics to display
+  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
+  g_Mode_picture_count = 0;
+  for(int i = 0 ; i < 5 ; i++){
+	 if(Current_mode_config[i*2] != 255)
+		 g_Mode_picture_count++;
+  }
+  for(int i = 0; i < g_Mode_picture_count; i++){
+	  read_flash_page_DMA2d(&frame_buf_mode[MAX_IMAGE_SIZE*i], Current_mode_config[i*2]);
+  }
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -203,6 +235,9 @@ int main(void)
   {
 	  image_arr_rgb888[i] = 0xFF;
   }
+  HAL_NVIC_SetPriority(LTDC_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(LTDC_IRQn);
+  HAL_LTDC_ProgramLineEvent(&hltdc, 0);
 
     while (1)
 	{
@@ -393,6 +428,47 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief DMA2D Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DMA2D_Init(void)
+{
+
+  /* USER CODE BEGIN DMA2D_Init 0 */
+
+  /* USER CODE END DMA2D_Init 0 */
+
+  /* USER CODE BEGIN DMA2D_Init 1 */
+
+  /* USER CODE END DMA2D_Init 1 */
+  hdma2d.Instance = DMA2D;
+  hdma2d.Init.Mode = DMA2D_M2M;
+  hdma2d.Init.ColorMode = DMA2D_OUTPUT_RGB888;
+  hdma2d.Init.OutputOffset = 0;
+  hdma2d.Init.BytesSwap = DMA2D_BYTES_REGULAR;
+  hdma2d.Init.LineOffsetMode = DMA2D_LOM_PIXELS;
+  hdma2d.LayerCfg[1].InputOffset = 0;
+  hdma2d.LayerCfg[1].InputColorMode = DMA2D_INPUT_RGB888;
+  hdma2d.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
+  hdma2d.LayerCfg[1].InputAlpha = 0;
+  hdma2d.LayerCfg[1].AlphaInverted = DMA2D_REGULAR_ALPHA;
+  hdma2d.LayerCfg[1].RedBlueSwap = DMA2D_RB_REGULAR;
+  if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_DMA2D_ConfigLayer(&hdma2d, 1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DMA2D_Init 2 */
+
+  /* USER CODE END DMA2D_Init 2 */
+
 }
 
 /**
@@ -752,7 +828,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(en_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 3, 0);
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 3, 0);
@@ -1206,6 +1282,39 @@ void display_panel(uint8_t *frame_buf)
 		frame_buf_count += Pixel_Mapping_one_count;
 	}
 }
+void HAL_LTDC_LineEvenCallback(LTDC_HandleTypeDef* LTDC_Handler) {
+
+	if(play_mode == 3 || Mode_changed == 0 && g_change_pic == 1){
+
+		if(g_Mode_picture_count > g_current_pic){
+
+			if(g_change_pic == 1){
+				//display1
+				//display_panel(&frame_buf_mode[MAX_IMAGE_SIZE*g_current_pic]);
+				//display2
+//			    if (HAL_DMA2D_Start(&hdma2d, (uint32_t) &frame_buf_mode[MAX_IMAGE_SIZE*g_current_pic], &image_arr_rgb888, IMAGE_W, IMAGE_H) == HAL_OK) {
+//			        // Wait for the transfer to complete
+//			        HAL_DMA2D_PollForTransfer(&hdma2d, 10); // Timeout in milliseconds
+//			    }
+				//display3
+//				if(HAL_LTDC_SetAddress(&hltdc, &frame_buf_mode[MAX_IMAGE_SIZE*g_current_pic], 0) != HAL_OK)
+//				{
+//					Error_Handler();
+//				}
+				g_test++;
+				g_change_pic = 0;
+				g_current_pic++;
+			}
+		}
+		if(g_Mode_picture_count <= (g_current_pic)){
+			g_current_pic = 0;
+		}
+		if(g_change_pic){
+			g_test++;
+		}
+	}
+	HAL_LTDC_ProgramLineEvent(&hltdc, 0);
+  }
 
 /*====================================flash function begin====================================*/
 uint8_t read_flash_SR()
@@ -1511,7 +1620,7 @@ void mode_init(){
 }
 void write_flash_config()
 {
-	//content_size�???0=16kb, 1=32kb, 2=32kb, 3=64kb
+	//content_size�?????0=16kb, 1=32kb, 2=32kb, 3=64kb
 	int divide_value = 0;
 	if(content_size==0) divide_value=256/64; //divide_value=4
 	else if(content_size==1) divide_value=256/128; //divide_value=2
@@ -1631,6 +1740,62 @@ void read_flash_page(uint8_t *data, uint8_t image_id)
 		HAL_SPI_Receive(&hspi2, &data[count*256], 256, 1000);
 		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_SET);
 		count++;
+	}
+}
+
+void read_flash_page_DMA2d(uint8_t *data, uint8_t image_id)
+{
+	int divide_value = 0;
+	if(content_size==0) divide_value=256/64;
+	else if(content_size==1) divide_value=256/128;
+	else if(content_size==2) divide_value=256/256;
+	uint8_t frame_buf[MAX_IMAGE_SIZE] = {0};
+	memset(frame_buf, 0, sizeof(frame_buf));
+
+	int image_id_H = image_id / divide_value;
+	int image_id_L = image_id % divide_value;
+	int count = 0;
+	for (uint32_t i = image_id_L*(256/divide_value); i < (image_id_L+1)*(256/divide_value); i++)
+	{
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_RESET);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x03}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){image_id_H}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){i}, 1, 1000);
+		HAL_SPI_Transmit(&hspi2, (uint8_t[]){0x00}, 1, 1000);
+		HAL_SPI_Receive(&hspi2, &frame_buf[count*256], 256, 1000);
+		HAL_GPIO_WritePin(GPIOB, flash_cs_Pin, GPIO_PIN_SET);
+		count++;
+	}
+
+	int num_ones = 0;
+	uint16_t Pixel_Mapping_one = Pixel_Mapping_one_L | Pixel_Mapping_one_H << 8;
+	for (int i = 0; i < 12; i++)
+	{
+		if (Pixel_Mapping_one & (1 << i))
+		{
+			num_ones++;
+		}
+	}
+
+	int frame_buf_count = 0;
+	int Pixel_Mapping_one_count = 0;
+	int c = 0;
+	for (int i = 0; i < IMAGE_H*IMAGE_W; i += num_ones)
+	{
+		Pixel_Mapping_one_count = 0;
+		c = 0;
+		for (int j = 0; j < 12; j++)
+		{
+			if (Pixel_Mapping_one & (1 << j))
+			{
+				frame_buf_count += Pixel_Mapping_one_count;
+				data[frame_buf_count] = frame_buf[i + c];
+				c++;
+				Pixel_Mapping_one_count = 0;
+			}
+			Pixel_Mapping_one_count++;
+		}
+		frame_buf_count += Pixel_Mapping_one_count;
 	}
 }
 
