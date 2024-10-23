@@ -52,7 +52,7 @@ SPI_HandleTypeDef hspi3;
 UART_HandleTypeDef huart4;
 
 /* USER CODE BEGIN PV */
-#define MAX_IMAGE_SIZE 65536
+#define MAX_IMAGE_SIZE 57000
 //for mode
 #define Max_pic_per_mode 5
 #define Max_mode_num 11
@@ -83,16 +83,16 @@ uint8_t frame_buf_tmp[MAX_IMAGE_SIZE] = {0};
 uint8_t frame_buf_0[MAX_IMAGE_SIZE] = {0};
 uint8_t frame_buf_1[MAX_IMAGE_SIZE] = {0};
 uint8_t frame_buf_flash[MAX_IMAGE_SIZE] = {0};
-uint8_t frame_buf_mode[150000] = {0};
+uint8_t frame_buf_mode[287000] = {0};
 uint8_t play_mode = 0;		  //0=Static display, 1=Dynamic display, 2=Dynamic display frame buffer (0) and frame buffer (1)
 uint8_t play_mode_source = 0; //0=flash, 1=frame_buf_0, 2=frame_buf_1
-uint8_t image_arr_rgb888[MAX_IMAGE_SIZE*3] = {0};
+uint8_t image_arr_rgb888[MAX_IMAGE_SIZE] = {0};
 uint8_t display_image_number = 0;
 uint8_t spi_rev_2byte[2] = {0};
 uint8_t setting_changed = 0;
 
 //for mode
-uint8_t Playing_mode = 1;
+uint8_t Playing_mode = 0;
 uint8_t Mode_pic[Max_pic_per_mode]={0};
 /*
 uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num+1]=
@@ -110,10 +110,10 @@ uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num+1]=
 		0,1,0,1,0,1,0,1,0,1} //playing_mode record at last.
 };
 */
-uint8_t Mode_changed = 1;//initial or mode change
+uint8_t Mode_changed = 0;//mode change
 uint8_t Mode_config[Max_pic_per_mode*2*Max_mode_num]={0};
 uint8_t Current_mode_config[10]={0};
-uint8_t Current_Picture = 0;
+//uint8_t Current_Picture = 0;
 uint8_t Picture_count = 0;
 
 //for LCD_IRQ
@@ -235,9 +235,9 @@ int main(void)
   {
 	  image_arr_rgb888[i] = 0xFF;
   }
-  HAL_NVIC_SetPriority(LTDC_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(LTDC_IRQn);
-  HAL_LTDC_ProgramLineEvent(&hltdc, 0);
+//  HAL_NVIC_SetPriority(LTDC_IRQn, 0, 0);
+//  HAL_NVIC_EnableIRQ(LTDC_IRQn);
+//  HAL_LTDC_ProgramLineEvent(&hltdc, 0);
 
     while (1)
 	{
@@ -286,6 +286,7 @@ int main(void)
 			  //initial or change mode
 				  if( Mode_changed )
 				  {
+					  write_flash_config();
 					  read_flash_config();
 					  Playing_mode = Mode_config[100];//playing_mode_store = [Max_pic_per_mode*2*(Max_mode_num-1)]
 					  //fill Current_mode_config from Mode_config by using Playing_mode
@@ -293,14 +294,17 @@ int main(void)
 						 Current_mode_config[j]=Mode_config[i];
 						 j++;
 					  }
-					  Current_Picture = 0;
+					  g_current_pic = 0;
 					  Mode_changed = 0;
 					  //check how many pics to display
 					  //warning don't set Current_mode_config = [255 255 1 2 10 2 255 255 255 255]
-					  Picture_count = 0;
+					  g_Mode_picture_count = 0;
 					  for(int i = 0 ; i < 5 ; i++){
 						 if(Current_mode_config[i*2] != 255)
-							 Picture_count++;
+							 g_Mode_picture_count++;
+					  }
+					  for(int i = 0; i < g_Mode_picture_count; i++){
+						  read_flash_page_DMA2d(&frame_buf_mode[MAX_IMAGE_SIZE*i], Current_mode_config[i*2]);
 					  }
 				  }
 			  }
@@ -1031,9 +1035,7 @@ void Write_Registers_data(uint8_t do_flag)
 			break;
 		case 33:// force play buffer to write flash.
 			Mode_config[100] = data[0];
-			Playing_mode = data[0];
-
-			write_flash_config();
+			//Playing_mode = data[0];
 			play_mode =3;
  			Mode_changed = 1;
 
@@ -1282,39 +1284,6 @@ void display_panel(uint8_t *frame_buf)
 		frame_buf_count += Pixel_Mapping_one_count;
 	}
 }
-void HAL_LTDC_LineEvenCallback(LTDC_HandleTypeDef* LTDC_Handler) {
-
-	if(play_mode == 3 || Mode_changed == 0 && g_change_pic == 1){
-
-		if(g_Mode_picture_count > g_current_pic){
-
-			if(g_change_pic == 1){
-				//display1
-				//display_panel(&frame_buf_mode[MAX_IMAGE_SIZE*g_current_pic]);
-				//display2
-//			    if (HAL_DMA2D_Start(&hdma2d, (uint32_t) &frame_buf_mode[MAX_IMAGE_SIZE*g_current_pic], &image_arr_rgb888, IMAGE_W, IMAGE_H) == HAL_OK) {
-//			        // Wait for the transfer to complete
-//			        HAL_DMA2D_PollForTransfer(&hdma2d, 10); // Timeout in milliseconds
-//			    }
-				//display3
-//				if(HAL_LTDC_SetAddress(&hltdc, &frame_buf_mode[MAX_IMAGE_SIZE*g_current_pic], 0) != HAL_OK)
-//				{
-//					Error_Handler();
-//				}
-				g_test++;
-				g_change_pic = 0;
-				g_current_pic++;
-			}
-		}
-		if(g_Mode_picture_count <= (g_current_pic)){
-			g_current_pic = 0;
-		}
-		if(g_change_pic){
-			g_test++;
-		}
-	}
-	HAL_LTDC_ProgramLineEvent(&hltdc, 0);
-  }
 
 /*====================================flash function begin====================================*/
 uint8_t read_flash_SR()
@@ -1508,11 +1477,11 @@ void mode_init(){
 	}
 	Mode_config[Max_pic_per_mode*(Max_mode_num-1)*2]=0;
 	//test mode 1
-	Mode_config[0]=0;
-	Mode_config[1]=1;
+	Mode_config[0]=0;//frist pic
+	Mode_config[1]=2;//frsit picture delay time
 	Mode_config[2]=1;
-	Mode_config[3]=1;
-	Mode_config[4]=255;
+	Mode_config[3]=2;
+	Mode_config[4]=255;//no pic
 	Mode_config[5]=1;
 	Mode_config[6]=255;
 	Mode_config[7]=1;
@@ -1531,16 +1500,16 @@ void mode_init(){
 	Mode_config[19]=1;
 	//test mode 3
 	Mode_config[20]=2;
-	Mode_config[21]=1;
+	Mode_config[21]=2;
 	Mode_config[22]=3;
-	Mode_config[23]=1;
+	Mode_config[23]=2;
 	Mode_config[24]=4;
-	Mode_config[25]=1;
+	Mode_config[25]=2;
 	Mode_config[26]=5;
-	Mode_config[27]=1;
+	Mode_config[27]=2;
 	Mode_config[28]=255;
 	Mode_config[29]=1;
-	//test mode 3
+	//test mode 4
 	Mode_config[30]=2;
 	Mode_config[31]=4;
 	Mode_config[32]=3;
@@ -1552,39 +1521,39 @@ void mode_init(){
 	Mode_config[38]=255;
 	Mode_config[39]=1;
 	//test mode 4
-	Mode_config[40]=6;
-	Mode_config[41]=1;
-	Mode_config[42]=7;
-	Mode_config[43]=1;
-	Mode_config[44]=8;
-	Mode_config[45]=1;
-	Mode_config[46]=9;
-	Mode_config[47]=1;
-	Mode_config[48]=10;
+	Mode_config[40]=7;
+	Mode_config[41]=2;
+	Mode_config[42]=8;
+	Mode_config[43]=2;
+	Mode_config[44]=9;
+	Mode_config[45]=2;
+	Mode_config[46]=10;
+	Mode_config[47]=2;
+	Mode_config[48]=255;
 	Mode_config[49]=1;
-	//test mode 5
-	Mode_config[50]=6;
-	Mode_config[51]=4;
-	Mode_config[52]=7;
-	Mode_config[53]=4;
-	Mode_config[54]=8;
-	Mode_config[55]=4;
-	Mode_config[56]=9;
-	Mode_config[57]=4;
-	Mode_config[58]=10;
-	Mode_config[59]=4;
 	//test mode 6
+	Mode_config[50]=7;
+	Mode_config[51]=4;
+	Mode_config[52]=8;
+	Mode_config[53]=4;
+	Mode_config[54]=9;
+	Mode_config[55]=4;
+	Mode_config[56]=10;
+	Mode_config[57]=4;
+	Mode_config[58]=255;
+	Mode_config[59]=4;
+	//test mode 7
 	Mode_config[60]=11;
-	Mode_config[61]=1;
+	Mode_config[61]=2;
 	Mode_config[62]=12;
-	Mode_config[63]=1;
+	Mode_config[63]=2;
 	Mode_config[64]=255;
 	Mode_config[65]=1;
 	Mode_config[66]=255;
 	Mode_config[67]=1;
 	Mode_config[68]=255;
 	Mode_config[69]=1;
-	//test mode 7
+	//test mode 8
 	Mode_config[70]=11;
 	Mode_config[71]=4;
 	Mode_config[72]=12;
@@ -1595,18 +1564,18 @@ void mode_init(){
 	Mode_config[77]=1;
 	Mode_config[78]=255;
 	Mode_config[79]=1;
-	//test mode 8
+	//test mode 9
 	Mode_config[80]=13;
-	Mode_config[81]=1;
+	Mode_config[81]=2;
 	Mode_config[82]=14;
-	Mode_config[83]=1;
+	Mode_config[83]=2;
 	Mode_config[84]=255;
 	Mode_config[85]=1;
 	Mode_config[86]=255;
 	Mode_config[87]=1;
 	Mode_config[88]=255;
 	Mode_config[89]=1;
-	//test mode 8
+	//test mode 10
 	Mode_config[90]=13;
 	Mode_config[91]=4;
 	Mode_config[92]=14;
@@ -1617,6 +1586,7 @@ void mode_init(){
 	Mode_config[97]=1;
 	Mode_config[98]=255;
 	Mode_config[99]=1;
+
 }
 void write_flash_config()
 {
@@ -2010,17 +1980,23 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if (GPIO_Pin == GPIO_PIN_12)
 	{
-		if(play_mode = 3){
 
-		}
 	}
 	else if(GPIO_Pin == GPIO_PIN_8 && Mode_changed == 0){
-		if(Picture_count <= Current_Picture ){
-			Current_Picture = 0;
+		if(g_Mode_picture_count <= g_current_pic ){
+			g_current_pic = 0;
 		}
-		read_flash_page(&frame_buf_flash, Current_mode_config[Current_Picture*2]);//Current_mode_config[pic1 ,pic1 delay time ,pic2 ,pic2 delay time...]
-		display_panel(&frame_buf_flash);
-		Current_Picture++;
+
+	    if (HAL_DMA2D_Start(&hdma2d, (uint32_t) &frame_buf_mode[MAX_IMAGE_SIZE*g_current_pic], &image_arr_rgb888, IMAGE_W, IMAGE_H) == HAL_OK) {
+	        // Wait for the transfer to complete
+	        HAL_DMA2D_PollForTransfer(&hdma2d, 50); // Timeout in milliseconds
+	    }
+	    g_current_pic++;
+	}
+
+	if(GPIO_Pin == GPIO_PIN_8 && Mode_changed == 1){
+		g_current_pic = 0;
+		//HAL_Delay(100);
 	}
 }
 
