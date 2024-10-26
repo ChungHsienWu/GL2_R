@@ -40,6 +40,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
 DMA2D_HandleTypeDef hdma2d;
 
 DSI_HandleTypeDef hdsi;
@@ -132,6 +134,7 @@ static void MX_LTDC_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_UART4_Init(void);
+static void MX_ADC1_Init(void);
 static void MX_DMA2D_Init(void);
 /* USER CODE BEGIN PFP */
 static void mipi_config(void);
@@ -189,6 +192,7 @@ int main(void)
   MX_SPI2_Init();
   MX_SPI3_Init();
   MX_UART4_Init();
+  MX_ADC1_Init();
   MX_DMA2D_Init();
   /* USER CODE BEGIN 2 */
   mipi_config();
@@ -227,8 +231,8 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  HAL_GPIO_WritePin(bat_en_GPIO_Port, bat_en_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(en_GPIO_Port, en_Pin, GPIO_PIN_SET);
+  //HAL_GPIO_WritePin(bat_en_GPIO_Port, bat_en_Pin, GPIO_PIN_SET);
+  //HAL_GPIO_WritePin(en_GPIO_Port, en_Pin, GPIO_PIN_SET);
 
   HAL_SPI_Receive_IT(&hspi3, &spi_rev_2byte, 2);
   for (int i = 0; i < IMAGE_H*IMAGE_W*3; i++)
@@ -307,6 +311,15 @@ int main(void)
 						  read_flash_page_DMA2d(&frame_buf_mode[MAX_IMAGE_SIZE*i], Current_mode_config[i*2]);
 					  }
 				  }
+
+				    HAL_GPIO_WritePin(adc_en_GPIO_Port, adc_en_Pin, GPIO_PIN_SET);
+					//HAL_GPIO_WritePin(adc_en_GPIO_Port, adc_en_Pin, GPIO_PIN_RESET);
+					//HAL_GPIO_WritePin(adc_en_GPIO_Port, adc_en_Pin, GPIO_PIN_SET);
+					HAL_ADC_Start(&hadc1);
+					HAL_ADC_PollForConversion(&hadc1, 50);
+					Power_Status = HAL_ADC_GetValue(&hadc1);
+					HAL_GPIO_WritePin(adc_en_GPIO_Port, adc_en_Pin, GPIO_PIN_SET);
+
 			  }
 //			  while(1)//display
 //			  {
@@ -432,6 +445,65 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Common config
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc1.Init.OversamplingMode = DISABLE;
+  hadc1.Init.DFSDMConfig = ADC_DFSDM_MODE_ENABLE;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -793,10 +865,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, RESXP_Pin|flash_cs_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(bat_en_GPIO_Port, bat_en_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(en_GPIO_Port, en_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(en_GPIO_Port, en_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(adc_en_GPIO_Port, adc_en_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pins : led_Pin RESXP_Pin flash_cs_Pin */
   GPIO_InitStruct.Pin = led_Pin|RESXP_Pin|flash_cs_Pin;
@@ -817,19 +889,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(pic_sw_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : bat_en_Pin */
-  GPIO_InitStruct.Pin = bat_en_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  HAL_GPIO_Init(bat_en_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pin : en_Pin */
   GPIO_InitStruct.Pin = en_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(en_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : adc_en_Pin */
+  GPIO_InitStruct.Pin = adc_en_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(adc_en_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
@@ -1590,7 +1662,7 @@ void mode_init(){
 }
 void write_flash_config()
 {
-	//content_size�?????0=16kb, 1=32kb, 2=32kb, 3=64kb
+	//content_size�????????0=16kb, 1=32kb, 2=32kb, 3=64kb
 	int divide_value = 0;
 	if(content_size==0) divide_value=256/64; //divide_value=4
 	else if(content_size==1) divide_value=256/128; //divide_value=2

@@ -69,10 +69,10 @@ void Error_Handler(void);
 #define pic_sw_EXTI_IRQn EXTI15_10_IRQn
 #define flash_cs_Pin GPIO_PIN_12
 #define flash_cs_GPIO_Port GPIOB
-#define bat_en_Pin GPIO_PIN_1
-#define bat_en_GPIO_Port GPIOC
 #define en_Pin GPIO_PIN_12
 #define en_GPIO_Port GPIOF
+#define adc_en_Pin GPIO_PIN_3
+#define adc_en_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

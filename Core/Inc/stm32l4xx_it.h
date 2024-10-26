@@ -58,7 +58,6 @@ void SysTick_Handler(void);
 void EXTI9_5_IRQHandler(void);
 void EXTI15_10_IRQHandler(void);
 void SPI3_IRQHandler(void);
-void LTDC_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
